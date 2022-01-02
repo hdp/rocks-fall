@@ -1,12 +1,12 @@
 .DEFAULT_GOAL := test
 
-export VIRTUAL_ENV := $(shell sh -c '. env/bin/activate; echo $${VIRTUAL_ENV}')
-export PATH := $(shell sh -c '. env/bin/activate; echo $${PATH}')
+export VIRTUAL_ENV := $(shell sh -c '. venv/bin/activate; echo $${VIRTUAL_ENV}')
+export PATH := $(shell sh -c '. venv/bin/activate; echo $${PATH}')
 
 .PHONY: coverage
 coverage:
 	coverage erase
-	coverage run --include rocks_fall/* -m pytest -ra
+	coverage run --include=rocks_fall/* -m pytest -ra
 	coverage report -m
 
 .PHONY: deps
@@ -26,9 +26,9 @@ deps:
 
 .PHONY: lint
 lint:
-	python -m flake8 rocks_fall
-	python -m pylint rocks_fall
-	python -m mypy rocks_fall
+	python -m flake8 .
+	python -m pylint rocks_fall tests
+	python -m mypy .
 
 .PHONY: publish
 publish:

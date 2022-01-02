@@ -5,7 +5,7 @@
 import unittest
 from decimal import Decimal
 
-from parameterized import parameterized
+from parameterized import parameterized  # type: ignore
 
 from rocks_fall import dice
 
@@ -15,7 +15,6 @@ _3d6 = 3 @ _d6
 
 
 class DiceTest(unittest.TestCase):
-
     def test_from_pairs_handles_duplicates(self):
         pairs = (
             (0, Decimal(0.25)),
