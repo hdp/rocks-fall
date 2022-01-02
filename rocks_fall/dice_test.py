@@ -69,6 +69,7 @@ class DiceTest(unittest.TestCase):
             ("operator", _d6 - 1, "d6 - 1"),
             ("operator + parens", (_d6 - 1) // 3, "(d6 - 1) // 3"),
             ("function", dice.explode(_d6), "explode(d6)"),
+            # TODO: Maybe make this 'explode(d6, max 3 times)'
             ("function + args", dice.explode(_d6, n=3), "explode(d6, n=3)"),
             # TODO: Maybe make this 'highest(1 of 3d6)'
             ("method", _3d6.highest(), "(3d6).highest()"),
