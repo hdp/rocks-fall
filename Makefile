@@ -26,9 +26,12 @@ deps:
 
 .PHONY: lint
 lint:
-	python -m flake8 .
+	-python -m flake8 .
+	python -m mypy --strict .
+
+.PHONY: lintall
+lintall: lint
 	python -m pylint rocks_fall tests
-	python -m mypy .
 
 .PHONY: publish
 publish:
