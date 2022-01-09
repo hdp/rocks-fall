@@ -199,7 +199,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         return list(self.get_contained())
 
     def get_contained(self) -> Iterable[Die[F]]:
-        return []
+        return [self]
 
     @overload
     def combine(self, func: Callable[[F, F], F], other: Die[F]) -> Die[F]:
@@ -247,7 +247,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
 
     def __lshift__(self, other) -> bool:
         # "can merge with"
-        return False
+        return other in self.contained
 
     # math methods
     @overload
@@ -260,9 +260,11 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
 
     def __add__(self, other):
         if isinstance(other, Die):
-            if self == other:
+            if self << other:
+                # The base class implementation of << is equality
                 return Repeated(2, self)
             if other << self:
+                # Another class might have a different implementation
                 return other + self
             return Bag([self, other])
         return self._apply_operator(add, other)
@@ -328,6 +330,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
 
     @dicemethod
     def highest(self, n: int = 1) -> Faces[F]:
+        print(self.highest_values(n))
         return self.highest_values(n).sum().faces
 
     @dicemethod
@@ -482,9 +485,6 @@ class Repeated(Die[F]):
 
     def get_contained(self) -> Iterable[Die[F]]:
         return self.number * [self.die]
-
-    def __lshift__(self, other: Die[F]) -> bool:
-        return self.die == other
 
     def __add__(self, other):
         if self << other:

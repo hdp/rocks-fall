@@ -31,6 +31,9 @@ class FacesTest(unittest.TestCase):
 
 
 class DiceTest(unittest.TestCase):
+    def test_slice_beyond_number_of_dice(self):
+        self.assertEqual(_d6.highest(2).faces, _d6.highest().faces)
+
     @parameterized.expand(
         [
             ("two dice sum", (_d6 + _d6).faces[8], 13.889),
