@@ -333,7 +333,6 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
 
     @dicemethod
     def highest(self, n: int = 1) -> Faces[F]:
-        print(self.highest_values(n))
         return self.highest_values(n).sum().faces
 
     @dicemethod
