@@ -27,7 +27,7 @@ class FacesTest(unittest.TestCase):
 
     def test_map_handles_duplicates(self):
         faces = dice.Faces({1: Decimal(0.5), 2: Decimal(0.5)})
-        self.assertEqual(faces.map(lambda x: not x), dice.Faces.from_constant(False))
+        self.assertEqual(faces.map(lambda x: not x), dice.Constant(False).faces)
 
 
 class DiceTest(unittest.TestCase):
@@ -48,6 +48,7 @@ class DiceTest(unittest.TestCase):
                 _3d6.values[1].faces[3],
                 24.074,
             ),
+            ("facediv", (_d6 // 2).faces[1], 33.333),
         ]
     )
     def test_weights(self, _, weight, expected):
@@ -71,10 +72,11 @@ class DiceTest(unittest.TestCase):
             ("function", dice.explode(_d6), "explode(d6)"),
             ("function + args", dice.explode(_d6, n=3), "explode(d6, n=3)"),
             ("method", _3d6.highest(), "highest(3d6)"),
-            ("method", _3d6.highest(2), "highest(3d6, 2)"),
-            ("getitem", _3d6.values[0], "3d6[0]"),
-            ("getitem", _3d6.values[:2], "3d6[:2]"),
-            ("getitem", _3d6.values[1:2], "3d6[1:2]"),
+            ("method + arg", _3d6.highest(2), "highest(3d6, 2)"),
+            ("getitem, single key", _3d6.values[0], "3d6[0]"),
+            ("getitem, slice", _3d6.values[:2], "3d6[:2]"),
+            ("getitem, negative slice", _3d6.values[-2:], "3d6[-2:]"),
+            ("getitem, middle slice", (4 * _d6).values[1:3], "4d6[1:3]"),
         ]
     )
     def test_str(self, _, die, expected):
