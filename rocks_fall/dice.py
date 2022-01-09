@@ -1,684 +1,580 @@
-"""Rocks fall, everyone dice"""
+from __future__ import annotations
 
 import abc
-import collections.abc
 import dataclasses
-from decimal import Decimal
 import functools
-import inspect
 import itertools
-import operator
-import pprint
-import re
 import sys
+from decimal import Decimal
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
-    Generator,
     Generic,
-    Hashable,
     Iterable,
-    Optional,
-    List,
-    Mapping,
+    Iterator,
     Sequence,
     Tuple,
     TypeVar,
-    Union,
     overload,
-    TYPE_CHECKING,
 )
 
 if TYPE_CHECKING and sys.version_info >= (3, 8):
-    from _typeshed import SupportsDunderLT
-    from typing import Protocol
+    from typing import Hashable, Protocol
 
-    class BaseFace(Hashable, SupportsDunderLT, Protocol):
+    from _typeshed import SupportsDunderLT
+
+    class Face(Hashable, SupportsDunderLT, Protocol):
         pass
 
-    F = TypeVar("F", bound=BaseFace, covariant=True)
-    F2 = TypeVar("F2", bound=BaseFace, covariant=True)
-    F3 = TypeVar("F3", bound=BaseFace, covariant=True)
+    class SupportsAddF(Face, Protocol):
+        def __add__(self: F, other: F) -> F:
+            ...
 
-#    class BaseDie(Protocol[F]):
-#        @abc.abstractproperty
-#        def faces(self) -> 'Iterator[Tuple[F, Decimal]]':
-#            raise NotImplementedError
-#
-#        def apply(self, func: Callable[[F, F2], F3], other: 'BaseDie[F2]') -> 'BaseDie[F3]':
-#            ret = lift_reducer(func)(self, other)
-#            # Set operator or function name
-#            return ret
+    class SupportsSubF(Face, Protocol):
+        def __sub__(self: F, other: F) -> F:
+            ...
 
+    class SupportsMulF(Face, Protocol):
+        def __mul__(self: F, other: F) -> F:
+            ...
+
+    class SupportsTrueDivF(Face, Protocol):
+        def __truediv__(self: F, other: F) -> F:
+            ...
+
+    class SupportsFloorDivF(Face, Protocol):
+        def __floordiv__(self: F, other: F) -> F:
+            ...
+
+    class SupportsModF(Face, Protocol):
+        def __mod__(self: F, other: F) -> F:
+            ...
+
+    class SupportsFaceDivF(SupportsAddF, SupportsFloorDivF, SupportsModF, Protocol):
+        pass
 
 else:
-    BaseFace = Any
-    BaseDie = Any
+    Face = Any
+    SupportsSubF = Any
+    SupportsMulF = Any
+    SupportsTrueDivF = Any
+    SupportsFloorDivF = Any
+    SupportsModF = Any
+    SupportsFaceDivF = Any
 
 
-Face = TypeVar("Face", bound=BaseFace)
-A = TypeVar("A", bound=BaseFace)
-FA = TypeVar("FA", bound=BaseFace)
-B = TypeVar("B", bound=BaseFace)
-FB = TypeVar("FB", bound=BaseFace)
-FC = TypeVar("FC", bound=BaseFace)
-D = TypeVar("D", bound="AbstractDie", covariant=True)
-Coercible = Union[Face, Iterable[Face], "Die"]
-WeightInput = Union[int, float, Decimal]
-FaceWeightPairs = Iterable[Tuple[Face, Decimal]]
-
-Reducer = Callable[[A, B], Face]
+Weight = Decimal
+F = TypeVar("F", bound=Face)
+F_co = TypeVar("F_co", bound=Face, covariant=True)
+G = TypeVar("G", bound=Face)
+H = TypeVar("H", bound=Face)
 
 
-def print_dice(*args) -> None:
-    strs = []
-    for arg in args:
-        if isinstance(arg, AbstractDie):
-            strs.append(arg.debug_string)
-        else:
-            strs.append(str(arg))
-    print(*strs)
-
-
-def facediv(x: Face, y: Face) -> Face:
-    """Divide a numerical face, rounding up.
-
-    e.g. facediv(5, 2) == 3, the same way you might emulate a d3 with a
-    physical d6 (1-2 = 1, 3-4 = 2, 5-6 = 3)
-    """
-    return operator.floordiv(x, y) + min(operator.mod(x, y), 1)
-
-
-class AbstractFormat(metaclass=abc.ABCMeta):
-    """Abstract base class for die formats."""
-
-    @abc.abstractmethod
-    def format(self, die: "Die") -> str:
-        """Format the given die."""
-
-
-class DefaultFormat(AbstractFormat):
-    """Default format for dice, based on face values."""
+@dataclasses.dataclass
+class Faces(Generic[F]):
+    weights: Dict[F, Weight]
 
     @classmethod
-    def format(cls, die: "Die") -> str:
-        faces_list = list(f for f, _ in die.faces)
-        if len(faces_list) == 1:
-            return str(faces_list[0])
-        if all(isinstance(face, int) for face in faces_list):
-            start = int(min(faces_list))
-            stop = int(max(faces_list))
-            if sorted(faces_list) == list(range(start, stop + 1)):
-                return f"Die({start}..{stop})"
-        return f'Die({", ".join(str(f) for f in faces_list)})'
-
-
-class DXFormat(AbstractFormat):
-    """Format for N-sided dice (d4, d6, etc.)."""
+    def from_pairs(cls, pairs: Iterable[Tuple[F, Weight]]) -> Faces:
+        weights: Dict[F, Weight] = {}
+        for f, w in pairs:
+            weights.setdefault(f, Decimal())
+            weights[f] += w
+        return cls(weights)
 
     @classmethod
-    def format(cls, die: "Die") -> str:
-        return f"d{max(die.faces)}"
+    def from_constant(cls, value: F) -> Faces:
+        return cls.from_pairs([(value, Decimal(1))])
 
+    def named(self, name: str) -> Die[F]:
+        return Named(name, self)
 
-@dataclasses.dataclass
-class ListFormat(AbstractFormat):
-    """Format for explicit lists of faces."""
+    def __getitem__(self, key: F) -> Weight:
+        return self.weights[key]
 
-    items: List
+    def __iter__(self) -> Iterator[Tuple[F, Weight]]:
+        return (i for i in self.weights.items())
 
-    def format(self, die: "Die") -> str:
-        start = min(self.items)
-        stop = max(self.items)
-        if sorted(self.items) == list(range(start, stop + 1)):
-            return f"d[{start}..{stop}]"
-        return f"d{sorted(self.items)}"
+    def __str__(self) -> str:
+        return str({f: float((w * 100).quantize(Decimal("1.000"))) for f, w in self})
 
-
-@dataclasses.dataclass
-class NamedFormat(AbstractFormat):
-    """Format for dice with arbitrary names."""
-
-    name: str
-
-    def format(self, die: "AbstractDie") -> str:
-        return self.name
-
-
-@dataclasses.dataclass
-class OperatorFormat(AbstractFormat):
-    """Format for dice based on operators and their combinations."""
-
-    a: "AbstractDie"
-    op_func: Callable
-    b: "AbstractDie"
-
-    OPERATOR_STRING = {
-        operator.add: "+",
-        operator.sub: "-",
-        operator.mul: "*",
-        facediv: "//",
-        operator.truediv: "/",
-    }
-
-    OPERATOR_PRECEDENCE = [
-        ["**"],
-        ["*", "@", "/", "//", "%"],
-        ["+", "-"],
-        ["<<", ">>"],
-        ["&"],
-        ["^"],
-        ["|"],
-        ["<", "<=", ">", ">=", "!=", "=="],
-    ]
-
-    def __post_init__(self) -> None:
-        if self.op_func not in self.OPERATOR_STRING:
-            raise KeyError(f"unhandled operator: {self.op_func}")
-
-    @property
-    def op_string(self) -> str:
-        """Return the operator's string representation."""
-        return self.OPERATOR_STRING[self.op_func]
-
-    @property
-    def precedence(self) -> int:
-        """Return the operator's precedence.
-
-        Unknown operators are assumed to be the lowest possible, which will
-        result in their having parens when combined with other operators.
-        """
-        i = 999
-        for ops in self.OPERATOR_PRECEDENCE:
-            if self.op_string in ops:
-                return i
-            i -= 1
-        return i
-
-    def format(self, die: "AbstractDie") -> str:
-        def _wrap(other: "AbstractDie") -> str:
-            if (
-                isinstance(other.formatter, self.__class__)
-                and other.formatter.precedence < self.precedence
-            ):
-                return f"({other})"
-            return str(other)
-
-        return f"{_wrap(self.a)} {self.op_string} {_wrap(self.b)}"
-
-
-@dataclasses.dataclass
-class FunctionFormat(AbstractFormat):
-
-    name: str
-    args: Sequence[Any] = dataclasses.field(default_factory=list)
-    kwargs: Mapping[str, Any] = dataclasses.field(default_factory=dict)
-    instance: Optional["AbstractDie"] = None
-
-    def format(self, die: "Die") -> str:
-        func_args = ", ".join(
-            [str(arg) for arg in self.args]
-            + [f"{k}={v!r}" for k, v in self.kwargs.items()]
-        )
-        if self.instance is not None:
-            return f"({self.instance}).{self.name}({func_args})"
-        return f"{self.name}({func_args})"
-
-    @classmethod
-    def from_caller(cls, func: Callable) -> "FunctionFormat":
-        arginfo = inspect.getargvalues(inspect.stack()[1].frame)
-        sig = inspect.signature(func)
-        bound = sig.bind(
-            **{
-                name: arginfo.locals[name]
-                for name, param in sig.parameters.items()
-                if param.default != arginfo.locals[name]
-            }
-        )
-        return cls(
-            name=func.__name__,
-            args=list(bound.args),
-            kwargs=bound.kwargs,
-            instance=getattr(func, "__self__", None),
-        )
-
-
-class Faces(List[Tuple[Face, Decimal]]):
     @overload
-    def map(self, func: Callable[[Face], Face]) -> "Die[Face]":
+    def map(self, func: Callable[[F], F]) -> Faces[F]:
         ...
 
     @overload
-    def map(self, func: Callable[[Face], FB]) -> "Die[FB]":
+    def map(self, func: Callable[[F], G]) -> Faces[G]:
         ...
 
     def map(self, func):
-        return Die.from_pairs((func(f), w) for f, w in self)
-
-    def sum(self) -> 'Die[Face]':
-        return self.map(lambda vs: functools.reduce(operator.add, vs))
-
-
-class AbstractDie(Generic[Face], metaclass=abc.ABCMeta):
-
-    formatter: AbstractFormat
-
-    def named(self: D, name: str) -> D:
-        return dataclasses.replace(self, formatter=NamedFormat(name))
-
-    def formatted(self: D, formatter: AbstractFormat) -> D:
-        return dataclasses.replace(self, formatter=formatter)
-
-    @abc.abstractmethod
-    def __str__(self) -> str:
-        pass
-
-    @abc.abstractproperty
-    def debug_string(self) -> str:
-        pass
-
-    @abc.abstractproperty
-    def faces(self) -> Faces:
-        pass
-
-    def get(self, key: Face) -> Decimal:
-        return dict(self.faces)[key]
-
-    @abc.abstractmethod
-    def apply(
-        self, func: Callable[[Face, FB], FC], other: "AbstractDie[FB]"
-    ) -> "AbstractDie[FC]":
-        pass
-
-    def accumulate(
-        self, func: Callable[[Face, FB], Face], others: "Iterable[AbstractDie[FB]]"
-    ) -> Generator["AbstractDie[Face]", None, None]:
-        ret = self
-        for other in others:
-            ret = ret.apply(func, other)
-            yield ret
+        return self.from_pairs((func(f), w) for f, w in self)
 
     @overload
-    @classmethod
-    def coerce(cls, other: "AbstractDie") -> "AbstractDie":  # type: ignore
-        pass
+    def combine(self, func: Callable[[F, F], F], other: Faces[F]) -> Faces[F]:
+        ...
 
     @overload
-    @classmethod
-    def coerce(cls, other: Iterable[FB]) -> "Die[FB]":
-        pass
+    def combine(self, func: Callable[[F, F], G], other: Faces[F]) -> Faces[G]:
+        ...
 
     @overload
-    @classmethod
-    def coerce(cls, other: FB) -> "Die[FB]":
-        pass
-
-    @classmethod
-    def coerce(cls, other):
-        if isinstance(other, AbstractDie):
-            return other
-        if isinstance(other, collections.abc.Iterable):
-            return Die.from_iterable(other)
-        return Die.single_value(other)
-
-    def __add__(self, other: Coercible) -> "AbstractDie":
-        if isinstance(self, MultiDie):
-            return MultiDie(list(self.dice) + [self.coerce(other)])
-        elif isinstance(self, Die):
-            return MultiDie([self, self.coerce(other)])
-        raise TypeError(f"unknown die type: {self!r}")
-
-    def __radd__(self, other: Coercible) -> "AbstractDie":
-        return self.coerce(other) + self
-
-    def __sub__(self, other: Coercible) -> "AbstractDie":
-        return self.apply(operator.sub, Die.coerce(other))
-
-    def __rsub__(self, other: Coercible) -> "AbstractDie":
-        return Die.coerce(other) - self
-
-    def __mul__(self, other: Coercible) -> "AbstractDie":
-        return self.apply(operator.mul, Die.coerce(other))
-
-    def __rmul__(self, other: Coercible) -> "AbstractDie":
-        return Die.coerce(other) * self
-
-    def __truediv__(self, other: Coercible) -> "AbstractDie":
-        return self.apply(operator.truediv, Die.coerce(other))
-
-    def __rtruediv__(self, other: Coercible) -> "AbstractDie":
-        return Die.coerce(other) / self
-
-    def __floordiv__(self, other: Coercible) -> "AbstractDie":
-        return self.apply(facediv, Die.coerce(other))
-
-    def __rfloordiv__(self, other: Coercible) -> "AbstractDie":
-        return Die.coerce(other) // self
-
-    def __mod__(self, other: Coercible) -> "AbstractDie":
-        return self.apply(operator.mod, Die.coerce(other))
-
-    def __rmod__(self, other: Coercible) -> "AbstractDie":
-        return Die.coerce(other) % self
-
-
-@dataclasses.dataclass(frozen=True)
-class Die(AbstractDie[Face]):
-    """A Die is a group of Faces and Weights.
-
-    A Face can be any hashable object; a Weight is a Decimal.
-    Identical faces are combined into a single entry with their combined
-    weights.
-    The sum of weights should always be equal to 1.
-
-    Operators on pairs of dice are applied to their faces elementwise to
-    produce a new die, with weights calculated from the input pair of faces'
-    weights.
-
-    e.g. as part of evaluating (d6 + d4), these face-weight pairs are added:
-
-    * (1, 0.1666...), (1, 0.25) = (2, 0.041666...)
-    * (1, 0.1666...), (2, 0.25) = (3, 0.041666...)
-    * [etc.]
-    * (6, 0.1666...), (4, 0.25) = (10, 0.041666...)
-
-    The resulting die will have faces valued 2 through 10 with values 5, 6, and
-    7 most likely to occur.
-
-    You can construct dice with arbitrary weights, but for most uses, see
-    Die.from_iterable(), Die.from_pairs(), and Die.single_value().
-
-    For convenience, operators also promote simple values to dice when
-    necessary, e.g. these are identical:
-
-        * d6 + 1
-        * d6 + Die.single_value(1)
-
-    Because faces can be arbitrary hashable objects, you can use them to
-    represent procedures with historical state or other complex calculations.
-    See the tests for examples.
-    """
-
-    _faces: Faces
-    formatter: AbstractFormat = dataclasses.field(default_factory=DefaultFormat)
-
-    def __str__(self):
-        return self.name_string
-
-    @property
-    def debug_string(self) -> str:
-        ret = self.name_string
-        faces_str = self.faces_string
-        if "\n" in faces_str:
-            ret += f":\n{faces_str}"
-        else:
-            ret += f": {faces_str}"
-        return ret
-
-    @property
-    def faces(self) -> Faces:
-        return self._faces
-
-    def __rmatmul__(self, other: int) -> "MultiDie[Face]":
-        return MultiDie(other * [self])
-
-    @property
-    def name_string(self) -> str:
-        return self.formatter.format(self)
-
-    @property
-    def faces_string(self) -> str:
-        return pprint.pformat(
-            {f: float((w * 100).quantize(Decimal("1.000"))) for f, w in self.faces}
-        )
-
-    @classmethod
-    def from_pairs(cls, pairs: Iterable[Tuple[Face, WeightInput]]) -> "Die[Face]":
-        faces: Dict[Face, List[WeightInput]] = {}
-        for f, w in pairs:
-            faces.setdefault(f, []).append(w)
-        return cls(Faces([(f, Decimal(sum(w))) for f, w in faces.items()]))
-
-    @classmethod
-    def from_iterable(cls, iterable: Iterable[Face]) -> "Die[Face]":
-        faces_list = list(iterable)
-        return cls.from_pairs(
-            (face, Decimal(1) / len(faces_list)) for face in faces_list
-        )
-
-    @classmethod
-    def single_value(cls, face: Face) -> "Die[Face]":
-        return cls.from_iterable([face])
-
-    def apply(
-        self, func: Callable[[Face, FB], FC], other: "AbstractDie[FB]"
-    ) -> "Die[FC]":
-        ret = lift_reducer(func)(self, other)
-        try:
-            return ret.formatted(OperatorFormat(self, func, other))
-        except KeyError:
-            pass
-        return ret.formatted(FunctionFormat(func.__name__, [self, other]))
-
-
-@dataclasses.dataclass(frozen=True)
-class MultiDie(AbstractDie[Face]):
-    """A MultiDie is a set of dice whose combinations haven't been evaluated.
-
-    By default, a MultiDie acts like a Die whose faces are generated by summing
-    the MultiDie's dice. More complex operations, including getting all the
-    individual values rolled, are available by calling reduce() or
-    accumulate().
-    """
-
-    dice: Sequence[AbstractDie[Face]]
-    formatter: AbstractFormat = dataclasses.field(default_factory=DefaultFormat)
-
-    def __str__(self) -> str:
-        return self.dice_string
-
-    @property
-    def dice_string(self) -> str:
-        parts = []
-        for die_name, count in collections.Counter(str(d) for d in self.dice).items():
-            if count == 1:
-                parts.append(die_name)
-            elif die_name.startswith("d"):
-                # TODO: use better detection
-                parts.append(f"{count}{die_name}")
-            else:
-                parts.append(f"{count}x({die_name})")
-        return " + ".join(parts)
-
-    @property
-    def debug_string(self) -> str:
-        if "\n" in self.sum.faces_string:
-            sep = "\n"
-        else:
-            sep = " "
-        return f"{self.dice_string}:{sep}{self.sum.faces_string}"
-
-    @property
-    def faces(self) -> Faces:
-        return self.sum.faces
-
-    @functools.cached_property
-    def sum(self) -> Die:
-        return self.reduce(operator.add)
-
-    def apply(self, reducer: Reducer, other: AbstractDie) -> Die:
-        raise NotImplementedError()
+    def combine(self, func: Callable[[F, G], F], other: Faces[G]) -> Faces[F]:
+        ...
 
     @overload
-    def reduce(
-        self,
-        reducer: Callable[[Face, Face], Face],
-        /,
-        initial: Optional[Die[Face]] = None,
-    ) -> Die[Face]:
-        pass
+    def combine(self, func: Callable[[F, G], G], other: Faces[G]) -> Faces[G]:
+        ...
 
     @overload
-    def reduce(
-        self, reducer: Callable[[FB, Face], FC], /, initial: Optional[Die[FB]] = None
-    ) -> Die[FC]:
-        pass
+    def combine(self, func: Callable[[F, G], H], other: Faces[G]) -> Faces[H]:
+        ...
 
-    def reduce(self, reducer, /, initial=None):
-        if initial is not None:
-            ret = functools.reduce(lift_reducer(reducer), self.dice, initial)
-        else:
-            ret = functools.reduce(lift_reducer(reducer), self.dice)
-        return ret.formatted(FunctionFormat(reducer.__name__, self.dice))
-
-    def slice(
-        self,
-        start: int = 0,
-        stop: Optional[int] = None,
-        step: int = 1,
-        reverse: bool = False,
-    ) -> Die[Tuple[Face, ...]]:
-        return self.reduce(
-            # We need protocols to represent this properly.
-            # This line means that all faces need to be sortable. If we could
-            # get away from that or relax it, things would be simpler.
-            lambda a, b: tuple(sorted(a + (b,), reverse=reverse)[:stop]),
-            initial=Die.single_value(tuple()),
-        ).faces.map(lambda v: v[start:stop:step])
-
-    def highest_values(self, n: int = 1) -> Die[Tuple[Face, ...]]:
-        return self.slice(0, n, reverse=True)
-
-    def highest(self, n: int = 1) -> Die[Face]:
-        return (
-            self.highest_values(n)
-            .faces.map(lambda vs: functools.reduce(lambda a, b: a + b, vs))
-            .formatted(FunctionFormat.from_caller(self.highest))
-        )
-
-    def lowest_values(self, n: int = 1) -> Die[Tuple[Face, ...]]:
-        return self.slice(0, n, reverse=False)
-
-    def lowest(self, n: int = 1) -> Die[Face]:
-        return (
-            self.lowest_values(n)
-            .faces.map(lambda vs: functools.reduce(lambda a, b: a + b, vs))
-            .formatted(FunctionFormat.from_caller(self.lowest))
-        )
-
-
-def lift_reducer(
-    func: Callable[[FA, FB], FC]
-) -> Callable[[AbstractDie[FA], AbstractDie[FB]], Die[FC]]:
-    """Lift a reducer function from faces to dice.
-
-    A reducer function combines two faces and returns a new face.
-    This function wraps a reducer so that it applies to each possible
-    combination of faces from two dice.
-    """
-
-    @functools.wraps(func)
-    def wrapper(a: AbstractDie[FA], b: AbstractDie[FB]) -> Die[FC]:
-        return Die.from_pairs(
+    def combine(self, func, other):
+        return self.from_pairs(
             (func(a_f, b_f), a_w * b_w)
-            for (a_f, a_w), (b_f, b_w) in itertools.product(a.faces, b.faces)
+            for (a_f, a_w), (b_f, b_w) in itertools.product(self, other)
         )
+
+
+def dicefunction(func: Callable[..., Faces[F]]) -> Callable[..., Die[F]]:
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> Die[F]:
+        return FunctionCall(func, args, kwargs)
 
     return wrapper
 
 
-def explode(die: AbstractDie, *, n: int = 2) -> AbstractDie:
-    """Return an exploding version of the given die.
+def dicemethod(func: Callable[..., Faces[F]]) -> Callable[..., Die[F]]:
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs) -> Die[F]:
+        return FunctionCall(func, (self,) + args, kwargs)
 
-    An exploding die is one that, whenever it rolls the maximum value, re-rolls
-    and adds the new value as well, continuing to roll and add as long as the
-    maximum is rolled.
+    return wrapper
 
-    By default, only two explosions will be calculated.
-    """
-    fmt = FunctionFormat.from_caller(explode)
 
+@dataclasses.dataclass
+class Slice(Generic[F]):
+
+    die: Die[F]
+
+    @overload
+    def __getitem__(self, key: int) -> Die[F]:
+        pass
+
+    @overload
+    def __getitem__(self, key: slice) -> Die[Tuple[F, ...]]:
+        pass
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return (
+                self.die.slice_values(slice(key, key + 1))
+                .faces.map(lambda v: v[0])
+                .named(f"{self.die}[{key}]")
+            )
+        else:
+            key_str = (
+                ("" if key.start is None else str(key.start))
+                + ":"
+                + ("" if key.stop is None else str(key.stop))
+            )
+            if key.step is not None:
+                key_str += f":{key.step}"
+            return self.die.slice_values(key).named(f"{self.die}[{key_str}]")
+
+
+class Die(Generic[F], metaclass=abc.ABCMeta):
+    @functools.cached_property
+    def faces(self) -> Faces:
+        return self.get_faces()
+
+    @abc.abstractmethod
+    def get_faces(self) -> Faces:
+        pass
+
+    @functools.cached_property
+    def contained(self) -> Iterable[Die[F]]:
+        return list(self.get_contained())
+
+    def get_contained(self) -> Iterable[Die[F]]:
+        return []
+
+    @overload
+    def combine(self, func: Callable[[F, F], F], other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def combine(self, func: Callable[[F, F], G], other: Die[F]) -> Die[G]:
+        ...
+
+    @overload
+    def combine(self, func: Callable[[F, G], F], other: Die[G]) -> Die[F]:
+        ...
+
+    @overload
+    def combine(self, func: Callable[[F, G], G], other: Die[G]) -> Die[G]:
+        ...
+
+    @overload
+    def combine(self, func: Callable[[F, G], H], other: Die[G]) -> Die[H]:
+        ...
+
+    def combine(self, func, other):
+        return self.faces.combine(func, other.faces).named(
+            f"{self}.combine({func.__name__}, {other})"
+        )
+
+    @overload
+    def map(self, func: Callable[[F], F]) -> Die[F]:
+        ...
+
+    @overload
+    def map(self, func: Callable[[F], G]) -> Die[G]:
+        ...
+
+    def map(self, func):
+        return self.faces.map(func).named(f"{self}.map({func.__name__})")
+
+    def named(self, name: str) -> Die[F]:
+        return Named(name, self.faces)
+
+    def _apply_operator(self, operator, other):
+        if isinstance(other, Die):
+            return operator(self, other)
+        return operator(self, Constant(other))
+
+    def __lshift__(self, other) -> bool:
+        # "can merge with"
+        return False
+
+    # math methods
+    @overload
+    def __add__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __add__(self, other: int) -> Die[F]:
+        ...
+
+    def __add__(self, other):
+        if isinstance(other, Die):
+            if self == other:
+                return Repeated(2, self)
+            if other << self:
+                return other + self
+            return Bag([self, other])
+        return self._apply_operator(add, other)
+
+    def __mul__(self, other: Die[F]) -> Die[F]:
+        return self._apply_operator(mul, other)
+
+    def __rmul__(self, other: int) -> Die[F]:
+        return Repeated(other, self)
+
+    @overload
+    def __sub__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __sub__(self, other: int) -> Die[F]:
+        ...
+
+    def __sub__(self, other):
+        return self._apply_operator(sub, other)
+
+    @overload
+    def __truediv__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __truediv__(self, other: int) -> Die[F]:
+        ...
+
+    def __truediv__(self, other):
+        return self._apply_operator(truediv, other)
+
+    @overload
+    def __floordiv__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __floordiv__(self, other: int) -> Die[F]:
+        ...
+
+    def __floordiv__(self, other):
+        return self._apply_operator(facediv, other)
+
+    @dicemethod
+    def slice_values(
+        self, key: slice = slice(0, None), reverse: bool = True
+    ) -> Faces[Tuple[F, ...]]:
+        acc = Faces.from_constant(tuple())
+        for d in self.contained:
+            acc = acc.combine(
+                lambda a, b: tuple(sorted(a + (b,), reverse=reverse))[: key.stop],
+                d.faces,
+            )
+        return acc.map(lambda f: f[key.start : key.stop : key.step])
+
+    @dicemethod
+    def slice(self, key: slice = slice(0, None), reverse: bool = True) -> Faces[F]:
+        return self.slice_values(key, reverse).sum().faces
+
+    @dicemethod
+    def highest_values(self, n: int = 1) -> Faces[Tuple[F, ...]]:
+        return self.slice_values(slice(0, n), reverse=True).faces
+
+    @dicemethod
+    def highest(self, n: int = 1) -> Faces[F]:
+        return self.highest_values(n).sum().faces
+
+    @dicemethod
+    def lowest_values(self, n: int = 1) -> Faces[Tuple[F, ...]]:
+        return self.slice_values(slice(0, n), reverse=False).faces
+
+    @dicemethod
+    def lowest(self, n: int = 1) -> Faces[F]:
+        return self.lowest_values(n).sum().faces
+
+    @dicemethod
+    def sum(self) -> Faces[F]:
+        return self.faces.map(lambda v: functools.reduce(lambda a, b: a + b, v))
+
+    @property
+    def values(self) -> Slice[F]:
+        return Slice(self)
+
+
+@dataclasses.dataclass
+class Named(Die[F]):
+
+    name: str
+    _faces: Faces[F]
+
+    def get_faces(self) -> Faces[F]:
+        return self._faces
+
+    def __str__(self):
+        return self.name
+
+
+@dataclasses.dataclass
+class Constant(Die[F]):
+
+    value: F
+
+    def get_faces(self) -> Faces[F]:
+        return Faces({self.value: Decimal(1)})
+
+    def __str__(self):
+        return str(self.value)
+
+
+@dataclasses.dataclass(order=True)
+class DX(Die[int]):
+
+    size: int
+
+    def get_faces(self) -> Faces[int]:
+        return Faces({v: Decimal(1) / self.size for v in range(1, self.size + 1)})
+
+    def __str__(self):
+        return f"d{self.size}"
+
+
+@dataclasses.dataclass
+class Seq(Die[F]):
+
+    items: Sequence[F]
+
+    def get_faces(self) -> Faces[F]:
+        return Faces({v: Decimal(1) / len(self.items) for v in self.items})
+
+    def __str__(self):
+        if isinstance(self.items, range):
+            return f"d[{self.items.start}..{self.items.stop-1}]"
+        return f"d{list(self.items)}"
+
+
+@dataclasses.dataclass
+class Operator(Generic[F]):
+    symbol: str
+    precedence: int = 0
+
+    def __call__(
+        self, operator: Callable[[F_co, F_co], F_co]
+    ) -> Callable[[Die[F_co], Die[F_co]], Die[F_co]]:
+        return lambda *args, **kwargs: OperatorCall(
+            self.symbol, self.precedence, operator, *args, **kwargs
+        )
+
+
+@dataclasses.dataclass
+class OperatorCall(Die[F_co]):
+
+    symbol: str
+    precedence: int
+    operator: Callable[[F_co, F_co], F_co]
+    left: Die[F_co]
+    right: Die[F_co]
+
+    def __str__(self):
+        def _wrap(d: Die[F_co]) -> str:
+            if self.precedence > getattr(d, "precedence", 999):
+                return f"({d})"
+            return str(d)
+
+        return f"{_wrap(self.left)} {self.symbol} {_wrap(self.right)}"
+
+    def get_faces(self) -> Faces[F_co]:
+        return self.left.faces.combine(self.operator, self.right.faces)
+
+
+@Operator(symbol="+", precedence=10)
+def add(left: SupportsAddF, right: SupportsAddF) -> SupportsAddF:
+    return left + right
+
+
+@Operator(symbol="-", precedence=10)
+def sub(left: SupportsSubF, right: SupportsSubF) -> SupportsSubF:
+    return left - right
+
+
+@Operator(symbol="*", precedence=11)
+def mul(left: SupportsMulF, right: SupportsMulF) -> SupportsMulF:
+    return left * right
+
+
+@Operator(symbol="/", precedence=11)
+def truediv(left: SupportsTrueDivF, right: SupportsTrueDivF) -> SupportsTrueDivF:
+    return left / right
+
+
+@Operator(symbol="//", precedence=11)
+def facediv(left: SupportsFaceDivF, right: SupportsFaceDivF) -> SupportsFaceDivF:
+    return left // right + (1 if left % right else 0)
+
+
+@dataclasses.dataclass
+class Repeated(Die[F]):
+
+    number: int
+    die: Die[F]
+
+    def __post_init__(self) -> None:
+        if self.number < 1:
+            raise ValueError(f"number must be >= 1, got {self.number}")
+
+    def __str__(self) -> str:
+        if isinstance(self.die, DX):
+            return f"{self.number}{self.die}"
+        if isinstance(self.die, Operator):
+            return f"{self.number} x ({self.die})"
+        return f"{self.number} x {self.die}"
+
+    def get_faces(self) -> Faces[F]:
+        ret = self.die.faces
+        for _ in range(self.number - 1):
+            ret = ret.combine(lambda a, b: a + b, self.die.faces)
+        return ret
+
+    def get_contained(self) -> Iterable[Die[F]]:
+        return self.number * [self.die]
+
+    def __lshift__(self, other: Die[F]) -> bool:
+        return self.die == other
+
+    def __add__(self, other):
+        if self << other:
+            return dataclasses.replace(self, number=self.number + 1)
+        return super().__add__(other)
+
+
+@dataclasses.dataclass
+class Bag(Die[F]):
+
+    dice: Sequence[Die[F]]
+
+    def get_faces(self) -> Faces[F]:
+        ret = Faces.from_constant(0)
+        for die in self.dice:
+            ret = ret.combine(lambda a, b: a + b, die.faces)
+        return ret
+
+    def get_contained(self) -> Iterable[Die[F]]:
+        return self.dice
+
+    def __str__(self) -> str:
+        return " + ".join(str(d) for d in self.dice)
+
+    def __lshift__(self, other: Die[F]) -> bool:
+        return True  # can contain anything
+
+    def __add__(self, other):
+        dice = list(self.dice)
+        for d in dice:
+            if not (other == d or other << d):
+                continue
+            dice.remove(d)
+            return dataclasses.replace(
+                self,
+                dice=dice + [d + other],
+            )
+        return dataclasses.replace(self, dice=self.dice + [other])
+
+
+@dataclasses.dataclass
+class FunctionCall(Die[F]):
+
+    func: Callable[..., Faces[F]]
+    args: Sequence[Die[F]]
+    kwargs: Dict[Any, Any]
+
+    def __str__(self):
+        parts = [str(arg) for arg in self.args] + [
+            f"{k}={v!r}" for k, v in self.kwargs.items()
+        ]
+        return f"{self.func.__name__}({', '.join(parts)})"
+
+    def get_faces(self) -> Faces:
+        return self.func(*self.args, **self.kwargs)
+
+
+@dicefunction
+def explode(die: Die[int], *, n: int = 2) -> Faces[int]:
     if n < 1:
-        raise ValueError(f"must explode with n at least 1, got {n}")
+        raise ValueError("must explode with n >= 1, got {n}")
 
-    def reducer(a: int, b: int) -> int:
-        if a % max(f for f, _ in die.faces) == 0:
-            return a + b
-        return a
+    max_value = max(f for f, _ in die.faces)
 
-    acc = die
-    # TODO: replace with MultiDie method
+    faces = die.faces
     for _ in range(n):
-        acc = acc.apply(reducer, die)
-
-    return acc.formatted(fmt)
-
-
-def parse(spec: str) -> AbstractDie:
-    """Parse dice strings.
-
-    Dice are of the form "<N>d<X>" where N is optional, e.g. "3d6", "d8".
-
-    Multiple kinds of dice can be specified by using "+", e.g. "2d6+d4". Other
-    operators are not supported.
-    """
-    dice = []
-    for dice_spec in re.split(r"\s*\+\s*", spec):
-        n, x = dice_spec.split("d")
-        try:
-            dice.extend(int(n or "1") * [d(int(x))])
-        except ValueError as exc:
-            raise ValueError(f"while parsing {dice_spec}: {exc}") from exc
-    if len(dice) == 1:
-        return dice[0]
-    return MultiDie(dice)
-
-
-@overload
-def d(arg: Iterable[Face]) -> Die[Face]:
-    pass
-
-
-@overload
-def d(arg: int) -> Die[int]:
-    pass
-
-
-def d(arg):  # pylint: disable=invalid-name
-    """Smart dice constructor.
-
-    Options:
-        * An Iterable will be passed to Die.from_iterable.
-        * An int 'n' will be used to generate a list of numbers (1..n) and
-          passed to Die.from_iterable.
-    """
-    if isinstance(arg, int):
-        return Die.from_iterable(range(1, arg + 1)).formatted(DXFormat())
-    if isinstance(arg, collections.abc.Iterable):
-        faces = list(arg)
-        return Die.from_iterable(faces).formatted(ListFormat(faces))
-    raise ValueError(f"unhandled die type: {arg}")
+        # If a % max_value == 0, we must have only rolled max values so far.
+        faces = faces.combine(lambda a, b: a + (0 if a % max_value else b), die.faces)
+    return faces
 
 
 if __name__ == "__main__":
-    d4 = d(4)
-    d6 = d(6)
-    d8 = d(8)
-    dF = d([-1, 0, +1]).named("dF")
-    print_dice(d6)
-    print_dice(d6 / 2)
-    print_dice(d6 // 2)
-    print_dice(d6 + d6)
-    print_dice(2 @ d6 + 3 @ d4 + 1 @ d8)
-    print_dice(explode(d6, n=3))
-    print_dice(explode(d6) + d4)
-    print_dice(3 * (d6 + 1))
-    print_dice(1 + d6)
-    #    for i in d6.faces:
-    #        for j in (d4 + 1).faces:
-    #            print_dice(f'facediv({i}, {j}) = {facediv(i, j)}')
-    print_dice(d6 // (d4 + 1))
-    print_dice(1 - d6)
-    print_dice(d8)
-    print_dice(3 @ dF)
+    d4 = DX(4)
+    d6 = DX(6)
+    dF = Seq([-1, 0, 1]).named("dF")
+    print(f"{dF}: {dF!r}")
+    print(d6)
+    print(d6.faces)
+    print((3 * d6).slice(slice(1, 2)).faces)
+    d6_plus_d4 = d6 + d4
+    exploded_d6 = explode(d6)
+
+    reveal_type((2 * d6))
+    reveal_type((2 * d6).highest)
+    reveal_type((2 * d6).highest())
+
+    reveal_type((d4 + d6))
+    reveal_type((d4 + d6).combine)
+    reveal_type((d4 + d6).combine(lambda a, b: a > b, (d6 + d6)))
+
+    reveal_type((d4 + d6))
+    reveal_type((d4 + d6).map)
+    reveal_type((d4 + d6).map(lambda v: v + 1))

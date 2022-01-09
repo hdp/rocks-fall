@@ -22,7 +22,7 @@ num_light_dice: int = 1
 if starting_values is None:
     starting_values = range(1, max_ruin)
 if dark_die is None:
-    dark_die = dice.d(max_ruin)
+    dark_die = dice.DX(max_ruin)
 assert isinstance(dark_die, dice.Die)
 if light_die is None:
     light_die = dark_die
@@ -65,16 +65,21 @@ def time_to_stop(state_die: dice.Die[State]) -> bool:
 
 
 if num_light_dice:
-    light_dice = num_light_dice @ light_die
-    ruin_die = dark_die.apply(lambda a, b: RuinRoll(a, a >= b), light_dice.highest())
+    light_dice = num_light_dice * light_die
+    ruin_die = dark_die.combine(
+        lambda a, b: RuinRoll(a, a >= b), light_dice.highest()
+    ).named(f"ruin({dark_die}, {light_dice})")
 else:
-    ruin_die = dark_die.faces.map(RuinRoll)
+    ruin_die = dark_die.map(RuinRoll).named(f"ruin({dark_die})")
+print(ruin_die)
 
 
 def ruin_results(starting_ruin: int) -> Generator[Dict, None, None]:
-    state_die = dice.Die.single_value(State(ruin=starting_ruin, starting_ruin=starting_ruin))
+    state_die: dice.Die[State] = dice.Constant(
+        State(ruin=starting_ruin, starting_ruin=starting_ruin)
+    )
     for roll in max_rolls * [ruin_die]:
-        state_die = state_die.apply(advance, roll)
+        state_die = state_die.faces.combine(advance, roll.faces).named("state")
         for v, w in state_die.faces:
             yield dict(dataclasses.asdict(v), probability=float(w))
         if time_to_stop(state_die):
