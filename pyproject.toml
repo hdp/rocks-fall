@@ -10,13 +10,18 @@ classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]
 
 [project.urls]
-Home = "https://github.com/hdp/rocks_fall"
+Home = "https://github.com/hdp/rocks-fall"
+
+[project.optional-dependencies]
+test = [
+    "parameterized",
+]
 
 [tool.black]
 target-version = ['py37']
 
 [tool.pylint.'BASIC']
-good-names = ["a", "b", "i", "j", "n", "x", "y"]
+good-names = ["a", "b", "f", "n", "w"]
 
 [tool.pylint.'MASTER']
 jobs = 0
