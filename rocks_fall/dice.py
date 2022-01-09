@@ -186,7 +186,7 @@ class Slice(Generic[F]):
 
 
 class Die(Generic[F], metaclass=abc.ABCMeta):
-    @functools.cached_property
+    @property
     def faces(self) -> Faces:
         return self.get_faces()
 
@@ -194,7 +194,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
     def get_faces(self) -> Faces:
         pass
 
-    @functools.cached_property
+    @property
     def contained(self) -> Iterable[Die[F]]:
         return list(self.get_contained())
 
