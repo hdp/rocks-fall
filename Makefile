@@ -29,9 +29,12 @@ lint:
 	-python -m flake8 .
 	python -m mypy .
 
-.PHONY: lintall
-lintall: lint
+.PHONY: lintslow
+lintslow:
 	python -m pylint rocks_fall tests examples
+
+.PHONY: lintall
+lintall: lint lintslow
 
 .PHONY: publish
 publish:
