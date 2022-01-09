@@ -194,6 +194,9 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
     def get_faces(self) -> Faces:
         pass
 
+    def __len__(self) -> int:
+        return len(self.faces.weights)
+
     @property
     def contained(self) -> Iterable[Die[F]]:
         return list(self.get_contained())

@@ -34,6 +34,11 @@ class DiceTest(unittest.TestCase):
     def test_slice_beyond_number_of_dice(self):
         self.assertEqual(_d6.highest(2).faces, _d6.highest().faces)
 
+    def test_len(self):
+        self.assertEqual(len(_d6), 6)
+        self.assertEqual(len(dice.Seq([1, 1, 2, 3, 5])), 4)
+        self.assertEqual(len(_2d6), 11)
+
     @parameterized.expand(
         [
             ("two dice sum", (_d6 + _d6).faces[8], 13.889),
