@@ -421,10 +421,10 @@ class OperatorCall(Die[F_co]):
     right: Die[F_co]
 
     def __str__(self):
-        def _wrap(d: Die[F_co]) -> str:
-            if self.precedence > getattr(d, "precedence", 999):
-                return f"({d})"
-            return str(d)
+        def _wrap(die: Die[F_co]) -> str:
+            if self.precedence > getattr(die, "precedence", 999):
+                return f"({die})"
+            return str(die)
 
         return f"{_wrap(self.left)} {self.symbol} {_wrap(self.right)}"
 
@@ -514,13 +514,13 @@ class Bag(Die[F]):
 
     def __add__(self, other):
         dice = list(self.dice)
-        for d in dice:
-            if not (other == d or other << d):
+        for die in dice:
+            if not (other == die or other << die):
                 continue
-            dice.remove(d)
+            dice.remove(die)
             return dataclasses.replace(
                 self,
-                dice=dice + [d + other],
+                dice=dice + [die + other],
             )
         return dataclasses.replace(self, dice=self.dice + [other])
 
@@ -554,27 +554,3 @@ def explode(die: Die[int], *, n: int = 2) -> Faces[int]:
         # If a % max_value == 0, we must have only rolled max values so far.
         faces = faces.combine(lambda a, b: a + (0 if a % max_value else b), die.faces)
     return faces
-
-
-if __name__ == "__main__":
-    d4 = DX(4)
-    d6 = DX(6)
-    dF = Seq([-1, 0, 1]).named("dF")
-    print(f"{dF}: {dF!r}")
-    print(d6)
-    print(d6.faces)
-    print((3 * d6).slice(slice(1, 2)).faces)
-    d6_plus_d4 = d6 + d4
-    exploded_d6 = explode(d6)
-
-    reveal_type((2 * d6))
-    reveal_type((2 * d6).highest)
-    reveal_type((2 * d6).highest())
-
-    reveal_type((d4 + d6))
-    reveal_type((d4 + d6).combine)
-    reveal_type((d4 + d6).combine(lambda a, b: a > b, (d6 + d6)))
-
-    reveal_type((d4 + d6))
-    reveal_type((d4 + d6).map)
-    reveal_type((d4 + d6).map(lambda v: v + 1))
