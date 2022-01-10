@@ -270,6 +270,12 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
                 # Another class might have a different implementation
                 return other + self
             return Bag([self, other])
+        if isinstance(other, int):
+            # Try to avoid awkward "d6 + -1" formatting.
+            if other == 0:
+                return self
+            if other < 0:
+                return self - abs(other)
         return self._apply_operator(add, other)
 
     def __mul__(self, other: Die[F]) -> Die[F]:
@@ -287,6 +293,11 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         ...
 
     def __sub__(self, other):
+        if isinstance(other, int):
+            if other == 0:
+                return self
+            if other < 0:
+                return self + abs(other)
         return self._apply_operator(sub, other)
 
     @overload
