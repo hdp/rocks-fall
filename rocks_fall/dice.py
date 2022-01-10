@@ -72,6 +72,13 @@ G = TypeVar("G", bound=Face)
 H = TypeVar("H", bound=Face)
 
 
+_ADD = 10
+_SUB = 10
+_MUL = 20
+_DIV = 20
+_NO_PARENS_NEEDED = 99
+
+
 @dataclasses.dataclass
 class Faces(Generic[F]):
     weights: Dict[F, Weight]
@@ -149,7 +156,7 @@ def dicefunction(func: Callable[..., Faces[F]]) -> Callable[..., Die[F]]:
 def dicemethod(func: Callable[..., Faces[F]]) -> Callable[..., Die[F]]:
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs) -> Die[F]:
-        return FunctionCall(func, (self,) + args, kwargs)
+        return MethodCall(self, func, args, kwargs)
 
     return wrapper
 
@@ -186,6 +193,21 @@ class Slice(Generic[F]):
 
 
 class Die(Generic[F], metaclass=abc.ABCMeta):
+
+    # Subclasses should override this to be automatically wrapped in parens
+    # when formatting as needed.
+    def get_precedence(self) -> int:
+        return _NO_PARENS_NEEDED
+
+    def maybe_wrap(self, other: Die) -> str:
+        if self.get_precedence() > other.get_precedence():
+            return f"({other})"
+        return str(other)
+
+    @abc.abstractmethod
+    def __str__(self) -> str:
+        pass
+
     @property
     def faces(self) -> Faces:
         return self.get_faces()
@@ -278,7 +300,18 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
                 return self - abs(other)
         return self._apply_operator(add, other)
 
+    @overload
     def __mul__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __mul__(self, other: int) -> Die[F]:
+        ...
+
+    def __mul__(self, other):
+        if isinstance(other, int):
+            if other == 1:
+                return self
         return self._apply_operator(mul, other)
 
     def __rmul__(self, other: int) -> Die[F]:
@@ -436,39 +469,38 @@ class OperatorCall(Die[F_co]):
     left: Die[F_co]
     right: Die[F_co]
 
-    def __str__(self):
-        def _wrap(die: Die[F_co]) -> str:
-            if self.precedence > getattr(die, "precedence", 999):
-                return f"({die})"
-            return str(die)
+    def get_precedence(self) -> int:
+        return self.precedence
 
-        return f"{_wrap(self.left)} {self.symbol} {_wrap(self.right)}"
+    def __str__(self):
+        parts = [self.maybe_wrap(self.left), self.symbol, self.maybe_wrap(self.right)]
+        return " ".join(parts)
 
     def get_faces(self) -> Faces[F_co]:
         return self.left.faces.combine(self.operator, self.right.faces)
 
 
-@Operator(symbol="+", precedence=10)
+@Operator(symbol="+", precedence=_ADD)
 def add(left: SupportsAddF, right: SupportsAddF) -> SupportsAddF:
     return left + right
 
 
-@Operator(symbol="-", precedence=10)
+@Operator(symbol="-", precedence=_SUB)
 def sub(left: SupportsSubF, right: SupportsSubF) -> SupportsSubF:
     return left - right
 
 
-@Operator(symbol="*", precedence=11)
+@Operator(symbol="*", precedence=_MUL)
 def mul(left: SupportsMulF, right: SupportsMulF) -> SupportsMulF:
     return left * right
 
 
-@Operator(symbol="/", precedence=11)
+@Operator(symbol="/", precedence=_DIV)
 def truediv(left: SupportsTrueDivF, right: SupportsTrueDivF) -> SupportsTrueDivF:
     return left / right
 
 
-@Operator(symbol="//", precedence=11)
+@Operator(symbol="//", precedence=_DIV)
 def facediv(left: SupportsFaceDivF, right: SupportsFaceDivF) -> SupportsFaceDivF:
     return left // right + (1 if left % right else 0)
 
@@ -486,9 +518,7 @@ class Repeated(Die[F]):
     def __str__(self) -> str:
         if isinstance(self.die, DX):
             return f"{self.number}{self.die}"
-        if isinstance(self.die, Operator):
-            return f"{self.number} x ({self.die})"
-        return f"{self.number} x {self.die}"
+        return f"{self.number} x {self.maybe_wrap(self.die)}"
 
     def get_faces(self) -> Faces[F]:
         ret = self.die.faces
@@ -509,6 +539,9 @@ class Repeated(Die[F]):
 class Bag(Die[F]):
 
     dice: Sequence[Die[F]]
+
+    def get_precedence(self) -> int:
+        return _ADD
 
     def get_faces(self) -> Faces[F]:
         ret = Faces.from_constant(0)
@@ -553,6 +586,28 @@ class FunctionCall(Die[F]):
 
     def get_faces(self) -> Faces:
         return self.func(*self.args, **self.kwargs)
+
+
+@dataclasses.dataclass
+class MethodCall(Die[F]):
+
+    receiver: Die
+    func: Callable[..., Faces[F]]
+    args: Sequence[Die[F]]
+    kwargs: Dict[Any, Any]
+
+    def __str__(self):
+        if isinstance(self.receiver, OperatorCall) or isinstance(self.receiver, Bag):
+            receiver = f"({self.receiver})"
+        else:
+            receiver = str(self.receiver)
+        parts = [str(arg) for arg in self.args] + [
+            f"{k}={v!r}" for k, v in self.kwargs.items()
+        ]
+        return f"{receiver}.{self.func.__name__}({', '.join(parts)})"
+
+    def get_faces(self) -> Faces:
+        return self.func(self.receiver, *self.args, **self.kwargs)
 
 
 @dicefunction
