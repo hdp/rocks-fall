@@ -91,6 +91,8 @@ class DiceTest(unittest.TestCase):
             ("getitem, slice", _3d6.values[:2], "3d6[:2]"),
             ("getitem, negative slice", _3d6.values[-2:], "3d6[-2:]"),
             ("getitem, middle slice", (4 * _d6).values[1:3], "4d6[1:3]"),
+            ("getitem, slice with step", (4 * _d6).values[:4:2], "4d6[:4:2]"),
+            ("getitem of operator", (_d6 + 3 * _d4).values[:2], "(d6 + 3d4)[:2]"),
         ]
     )
     def test_str(self, _, die, expected):

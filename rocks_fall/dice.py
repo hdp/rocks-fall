@@ -162,7 +162,7 @@ def dicemethod(func: Callable[..., Faces[F]]) -> Callable[..., Die[F]]:
 
 
 @dataclasses.dataclass
-class Slice(Generic[F]):
+class Slicer(Generic[F]):
 
     die: Die[F]
 
@@ -176,20 +176,8 @@ class Slice(Generic[F]):
 
     def __getitem__(self, key):
         if isinstance(key, int):
-            return (
-                self.die.slice_values(slice(key, key + 1))
-                .faces.map(lambda v: v[0])
-                .named(f"{self.die}[{key}]")
-            )
-        else:
-            key_str = (
-                ("" if key.start is None else str(key.start))
-                + ":"
-                + ("" if key.stop is None else str(key.stop))
-            )
-            if key.step is not None:
-                key_str += f":{key.step}"
-            return self.die.slice_values(key).named(f"{self.die}[{key_str}]")
+            return Item(self.die, key)
+        return Slice(self.die, key)
 
 
 class Die(Generic[F], metaclass=abc.ABCMeta):
@@ -394,8 +382,8 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         return self.faces.map(lambda v: functools.reduce(lambda a, b: a + b, v))
 
     @property
-    def values(self) -> Slice[F]:
-        return Slice(self)
+    def values(self) -> Slicer[F]:
+        return Slicer(self)
 
 
 @dataclasses.dataclass
@@ -571,6 +559,38 @@ class Bag(Die[F]):
                 dice=dice + [die + other],
             )
         return dataclasses.replace(self, dice=self.dice + [other])
+
+
+@dataclasses.dataclass
+class Item(Die[F]):
+
+    die: Die[F]
+    key: int
+
+    def __str__(self) -> str:
+        return f"{self.maybe_wrap(self.die)}[{self.key}]"
+
+    def get_faces(self) -> Faces[F]:
+        return self.die.slice_values(slice(self.key, self.key + 1)).faces.map(
+            lambda v: v[0]
+        )
+
+
+@dataclasses.dataclass
+class Slice(Die[Tuple[F]]):
+
+    die: Die[F]
+    key: slice
+
+    def __str__(self) -> str:
+        parts = [str(s) if s is not None else ""
+                 for s in (self.key.start, self.key.stop)]
+        if self.key.step is not None:
+            parts.append(str(self.key.step))
+        return f"{self.maybe_wrap(self.die)}[{':'.join(parts)}]"
+
+    def get_faces(self) -> Faces[Tuple[F]]:
+        return self.die.slice_values(self.key).faces
 
 
 @dataclasses.dataclass
