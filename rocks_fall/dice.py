@@ -315,6 +315,8 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         return self._apply_operator(mul, other)
 
     def __rmul__(self, other: int) -> Die[F]:
+        if other == 1:
+            return self
         return Repeated(other, self)
 
     @overload

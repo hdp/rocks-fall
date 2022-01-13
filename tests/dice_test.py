@@ -74,6 +74,7 @@ class DiceTest(unittest.TestCase):
             ("operator with id value", _d6 + 0, "d6"),
             ("operator with opposite sign", _d6 + (-1), "d6 - 1"),
             ("operator with opposite sign (-)", _d6 - (-1), "d6 + 1"),
+            ("repetition is self", 1 * _d6, "d6"),
             ("repetition with *", 2 * _d6, "2d6"),
             ("repetition with +, single dice (2)", (dice.DX(6) + dice.DX(6)), "2d6"),
             ("repetition with +, repeated dice", (2 * _d6 + _d6), "3d6"),
