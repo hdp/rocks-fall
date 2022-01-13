@@ -52,8 +52,9 @@ if TYPE_CHECKING and sys.version_info >= (3, 8):
         def __mod__(self: F, other: F) -> F:
             ...
 
-    class SupportsFaceDivF(SupportsAddF, SupportsFloorDivF, SupportsModF, Protocol):
-        pass
+    class SupportsFaceDivF(SupportsAddF, Protocol):
+        def __divmod__(self: F, other: F) -> Tuple[F, F]:
+            ...
 
 else:
     Face = Any
@@ -492,7 +493,8 @@ def truediv(left: SupportsTrueDivF, right: SupportsTrueDivF) -> SupportsTrueDivF
 
 @Operator(symbol="//", precedence=_DIV)
 def facediv(left: SupportsFaceDivF, right: SupportsFaceDivF) -> SupportsFaceDivF:
-    return left // right + (1 if left % right else 0)
+    quot, rem = divmod(left, right)
+    return quot + (1 if rem else 0)
 
 
 @dataclasses.dataclass
