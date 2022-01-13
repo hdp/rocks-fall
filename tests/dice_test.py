@@ -7,10 +7,12 @@ from decimal import Decimal
 
 from parameterized import parameterized  # type: ignore
 
+from rocks_fall import d
 from rocks_fall import dice
 
-_d4 = dice.DX(4)
-_d6 = dice.DX(6)
+
+_d4 = d(4)
+_d6 = d(6)
 _2d6 = 2 * _d6
 _3d6 = 3 * _d6
 
@@ -27,7 +29,7 @@ class FacesTest(unittest.TestCase):
 
     def test_map_handles_duplicates(self):
         faces = dice.Faces({1: Decimal(0.5), 2: Decimal(0.5)})
-        self.assertEqual(faces.map(lambda x: not x), dice.Constant(False).faces)
+        self.assertEqual(faces.map(lambda x: not x), d.constant(False).faces)
 
 
 class DiceTest(unittest.TestCase):
@@ -36,7 +38,7 @@ class DiceTest(unittest.TestCase):
 
     def test_len(self):
         self.assertEqual(len(_d6), 6)
-        self.assertEqual(len(dice.Seq([1, 1, 2, 3, 5])), 4)
+        self.assertEqual(len(d[1, 1, 2, 3, 5]), 4)
         self.assertEqual(len(_2d6), 11)
 
     @parameterized.expand(
@@ -65,9 +67,9 @@ class DiceTest(unittest.TestCase):
     @parameterized.expand(
         [
             ("dX", _d6, "d6"),
-            ("d[range]", dice.Seq(range(5, 11)), "d[5..10]"),
-            ("d[...]", dice.Seq([1, 1, 2, 3, 5]), "d[1, 1, 2, 3, 5]"),
-            ("named", dice.Seq([-1, 0, 1]).named("dF"), "dF"),
+            ("d[range]", d[range(5, 11)], "d[5..10]"),
+            ("d[...]", d[1, 1, 2, 3, 5], "d[1, 1, 2, 3, 5]"),
+            ("named", d[-1, 0, 1].named("dF"), "dF"),
             ("operator", _d6 - 1, "d6 - 1"),
             ("operator + parens", (_d6 - 1) // 3, "(d6 - 1) // 3"),
             ("operator + parens (bag)", (_d4 + _d6) * 3, "(d4 + d6) * 3"),
@@ -76,7 +78,7 @@ class DiceTest(unittest.TestCase):
             ("operator with opposite sign (-)", _d6 - (-1), "d6 + 1"),
             ("repetition is self", 1 * _d6, "d6"),
             ("repetition with *", 2 * _d6, "2d6"),
-            ("repetition with +, single dice (2)", (dice.DX(6) + dice.DX(6)), "2d6"),
+            ("repetition with +, single dice (2)", (d(6) + d(6)), "2d6"),
             ("repetition with +, repeated dice", (2 * _d6 + _d6), "3d6"),
             ("repetition with +, repeated dice (r)", (_d6 + 2 * _d6), "3d6"),
             ("bag, two dice", _d6 + _d4, "d6 + d4"),

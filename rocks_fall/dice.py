@@ -644,3 +644,15 @@ def explode(die: Die[int], *, n: int = 2) -> Faces[int]:
         # If a % max_value == 0, we must have only rolled max values so far.
         faces = faces.combine(lambda a, b: a + (0 if a % max_value else b), die.faces)
     return faces
+
+
+class Builder:
+
+    def __call__(self, arg: int) -> DX:
+        return DX(arg)
+
+    def __getitem__(self, arg: Sequence[F]) -> Die[F]:
+        return Seq(arg)
+
+    def constant(self, arg: F) -> Die[F]:
+        return Constant(arg)
