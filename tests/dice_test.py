@@ -84,6 +84,7 @@ class DiceTest(unittest.TestCase):
             ("bag, two dice", _d6 + _d4, "d6 + d4"),
             ("bag, more dice", _2d6 + _d4, "2d6 + d4"),
             ("bag, mixed + order", _d6 + _d4 + _d6 + _d4, "2d6 + 2d4"),
+            ("bag with id value", _d6 + _d4 + 0, "d6 + d4"),
             ("function", dice.explode(_d6), "explode(d6)"),
             ("function + args", dice.explode(_d6, n=3), "explode(d6, n=3)"),
             ("method", _3d6.highest(), "3d6.highest()"),

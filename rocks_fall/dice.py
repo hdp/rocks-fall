@@ -550,7 +550,17 @@ class Bag(Die[F]):
     def __lshift__(self, other: Die[F]) -> bool:
         return True  # can contain anything
 
+    @overload
+    def __add__(self, other: Die[F]) -> Die[F]:
+        pass
+
+    @overload
+    def __add__(self, other: int) -> Die[F]:
+        pass
+
     def __add__(self, other):
+        if isinstance(other, int):
+            return super().__add__(other)
         dice = list(self.dice)
         for die in dice:
             if not (other == die or other << die):
