@@ -56,6 +56,30 @@ if TYPE_CHECKING and sys.version_info >= (3, 8):
         def __divmod__(self: F, other: F) -> Tuple[F, F]:
             ...
 
+    class SupportsLtF(Face, Protocol):
+        def __lt__(self: F, other: F) -> F:
+            ...
+
+    class SupportsLeF(Face, Protocol):
+        def __le__(self: F, other: F) -> F:
+            ...
+
+    class SupportsEqF(Face, Protocol):
+        def __eq__(self: F, other: F) -> F:  # type: ignore
+            ...
+
+    class SupportsNeF(Face, Protocol):
+        def __ne__(self: F, other: F) -> F:  # type: ignore
+            ...
+
+    class SupportsGtF(Face, Protocol):
+        def __gt__(self: F, other: F) -> F:
+            ...
+
+    class SupportsGeF(Face, Protocol):
+        def __ge__(self: F, other: F) -> F:
+            ...
+
 else:
     Face = Any
     SupportsSubF = Any
@@ -73,10 +97,11 @@ G = TypeVar("G", bound=Face)
 H = TypeVar("H", bound=Face)
 
 
-_ADD = 10
-_SUB = 10
-_MUL = 20
-_DIV = 20
+_ADD = 20
+_SUB = 20
+_MUL = 30
+_DIV = 30
+_CMP = 10
 _NO_PARENS_NEEDED = 99
 
 
@@ -346,6 +371,72 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
     def __floordiv__(self, other):
         return self._apply_operator(facediv, other)
 
+    @overload
+    def __lt__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __lt__(self, other: F) -> Die[F]:
+        ...
+
+    def __lt__(self, other):
+        return self._apply_operator(lt, other)
+
+    @overload
+    def __le__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __le__(self, other: F) -> Die[F]:
+        ...
+
+    def __le__(self, other):
+        return self._apply_operator(le, other)
+
+    @overload  # type: ignore
+    def __eq__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __eq__(self, other: F) -> Die[F]:
+        ...
+
+    def __eq__(self, other):
+        return self._apply_operator(eq, other)
+
+    @overload  # type: ignore
+    def __ne__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __ne__(self, other: F) -> Die[F]:
+        ...
+
+    def __ne__(self, other):
+        return self._apply_operator(ne, other)
+
+    @overload
+    def __gt__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __gt__(self, other: F) -> Die[F]:
+        ...
+
+    def __gt__(self, other):
+        return self._apply_operator(gt, other)
+
+    @overload
+    def __ge__(self, other: Die[F]) -> Die[F]:
+        ...
+
+    @overload
+    def __ge__(self, other: F) -> Die[F]:
+        ...
+
+    def __ge__(self, other):
+        return self._apply_operator(ge, other)
+
     @dicemethod
     def slice_values(
         self, key: slice = slice(0, None), reverse: bool = True
@@ -412,7 +503,7 @@ class Constant(Die[F]):
         return str(self.value)
 
 
-@dataclasses.dataclass(order=True)
+@dataclasses.dataclass
 class DX(Die[int]):
 
     size: int
@@ -495,6 +586,36 @@ def truediv(left: SupportsTrueDivF, right: SupportsTrueDivF) -> SupportsTrueDivF
 def facediv(left: SupportsFaceDivF, right: SupportsFaceDivF) -> SupportsFaceDivF:
     quot, rem = divmod(left, right)
     return quot + (1 if rem else 0)
+
+
+@Operator(symbol='<', precedence=_CMP)
+def lt(left: SupportsLtF, right: SupportsLtF) -> SupportsLtF:
+    return left < right
+
+
+@Operator(symbol='<=', precedence=_CMP)
+def le(left: SupportsLeF, right: SupportsLeF) -> SupportsLeF:
+    return left <= right
+
+
+@Operator(symbol='==', precedence=_CMP)
+def eq(left: SupportsEqF, right: SupportsEqF) -> SupportsEqF:
+    return left == right
+
+
+@Operator(symbol='!=', precedence=_CMP)
+def ne(left: SupportsNeF, right: SupportsNeF) -> SupportsNeF:
+    return left != right
+
+
+@Operator(symbol='>', precedence=_CMP)
+def gt(left: SupportsGtF, right: SupportsGtF) -> SupportsGtF:
+    return left > right
+
+
+@Operator(symbol='>=', precedence=_CMP)
+def ge(left: SupportsGeF, right: SupportsGeF) -> SupportsGeF:
+    return left >= right
 
 
 @dataclasses.dataclass
