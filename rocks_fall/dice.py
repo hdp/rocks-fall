@@ -269,7 +269,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         ...
 
     @overload
-    def __add__(self, other: int) -> Die[F]:
+    def __add__(self, other: F) -> Die[F]:
         ...
 
     def __add__(self, other):
@@ -294,7 +294,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         ...
 
     @overload
-    def __mul__(self, other: int) -> Die[F]:
+    def __mul__(self, other: F) -> Die[F]:
         ...
 
     def __mul__(self, other):
@@ -313,7 +313,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         ...
 
     @overload
-    def __sub__(self, other: int) -> Die[F]:
+    def __sub__(self, other: F) -> Die[F]:
         ...
 
     def __sub__(self, other):
@@ -329,7 +329,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         ...
 
     @overload
-    def __truediv__(self, other: int) -> Die[F]:
+    def __truediv__(self, other: F) -> Die[F]:
         ...
 
     def __truediv__(self, other):
@@ -340,7 +340,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         ...
 
     @overload
-    def __floordiv__(self, other: int) -> Die[F]:
+    def __floordiv__(self, other: F) -> Die[F]:
         ...
 
     def __floordiv__(self, other):
@@ -555,7 +555,7 @@ class Bag(Die[F]):
         pass
 
     @overload
-    def __add__(self, other: int) -> Die[F]:
+    def __add__(self, other: F) -> Die[F]:
         pass
 
     def __add__(self, other):
