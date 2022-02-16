@@ -13,6 +13,7 @@ from rocks_fall import dice
 
 _d4 = d(4)
 _d6 = d(6)
+_d8 = d(8)
 _2d6 = 2 * _d6
 _3d6 = 3 * _d6
 
@@ -65,6 +66,14 @@ class DiceTest(unittest.TestCase):
     def test_weights(self, _, weight, expected):
         self.assertAlmostEqual(float(weight * 100), float(expected), places=3)
 
+    def test_bag_values(self):
+        bag = _d8 + _d6 + _d6
+        # All faces have 3 values, even though the 2d6 are combined.
+        self.assertAlmostEqual(
+            bag.values[:].map(lambda f: len(f)).faces[3], 1, places=5
+        )
+        self.assertEqual(str(bag), "d8 + 2d6")
+
     @parameterized.expand(
         [
             ("dX", _d6, "d6"),
@@ -75,6 +84,7 @@ class DiceTest(unittest.TestCase):
             ("operator + parens", (_d6 - 1) // 3, "(d6 - 1) // 3"),
             ("operator + parens (bag)", (_d4 + _d6) * 3, "(d4 + d6) * 3"),
             ("operator with id value", _d6 + 0, "d6"),
+            ("operator with constant first", 1 + _d6, "d6 + 1"),
             ("operator with opposite sign", _d6 + (-1), "d6 - 1"),
             ("operator with opposite sign (-)", _d6 - (-1), "d6 + 1"),
             ("comparison operator", _d6 >= 4, "d6 >= 4"),

@@ -314,6 +314,8 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
                 return self - abs(other)
         return self._apply_operator(add, other)
 
+    __radd__ = __add__
+
     @overload
     def __mul__(self, other: Die[F]) -> Die[F]:
         ...
@@ -588,32 +590,32 @@ def facediv(left: SupportsFaceDivF, right: SupportsFaceDivF) -> SupportsFaceDivF
     return quot + (1 if rem else 0)
 
 
-@Operator(symbol='<', precedence=_CMP)
+@Operator(symbol="<", precedence=_CMP)
 def lt(left: SupportsLtF, right: SupportsLtF) -> SupportsLtF:
     return left < right
 
 
-@Operator(symbol='<=', precedence=_CMP)
+@Operator(symbol="<=", precedence=_CMP)
 def le(left: SupportsLeF, right: SupportsLeF) -> SupportsLeF:
     return left <= right
 
 
-@Operator(symbol='==', precedence=_CMP)
+@Operator(symbol="==", precedence=_CMP)
 def eq(left: SupportsEqF, right: SupportsEqF) -> SupportsEqF:
     return left == right
 
 
-@Operator(symbol='!=', precedence=_CMP)
+@Operator(symbol="!=", precedence=_CMP)
 def ne(left: SupportsNeF, right: SupportsNeF) -> SupportsNeF:
     return left != right
 
 
-@Operator(symbol='>', precedence=_CMP)
+@Operator(symbol=">", precedence=_CMP)
 def gt(left: SupportsGtF, right: SupportsGtF) -> SupportsGtF:
     return left > right
 
 
-@Operator(symbol='>=', precedence=_CMP)
+@Operator(symbol=">=", precedence=_CMP)
 def ge(left: SupportsGeF, right: SupportsGeF) -> SupportsGeF:
     return left >= right
 
@@ -663,7 +665,7 @@ class Bag(Die[F]):
         return ret
 
     def get_contained(self) -> Iterable[Die[F]]:
-        return self.dice
+        return itertools.chain.from_iterable([d.contained for d in self.dice])
 
     def __str__(self) -> str:
         return " + ".join(str(d) for d in self.dice)
@@ -716,8 +718,9 @@ class Slice(Die[Tuple[F]]):
     key: slice
 
     def __str__(self) -> str:
-        parts = [str(s) if s is not None else ""
-                 for s in (self.key.start, self.key.stop)]
+        parts = [
+            str(s) if s is not None else "" for s in (self.key.start, self.key.stop)
+        ]
         if self.key.step is not None:
             parts.append(str(self.key.step))
         return f"{self.maybe_wrap(self.die)}[{':'.join(parts)}]"
@@ -780,7 +783,6 @@ def explode(die: Die[int], *, n: int = 2) -> Faces[int]:
 
 
 class Builder:
-
     def __call__(self, arg: int) -> DX:
         return DX(arg)
 
