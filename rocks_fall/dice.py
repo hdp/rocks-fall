@@ -286,7 +286,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
 
     def __lshift__(self, other) -> bool:
         # "can merge with"
-        return other in self.contained
+        return any(d.equals(other) for d in self.contained)
 
     # math methods
     @overload
@@ -479,8 +479,11 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
     def values(self) -> Slicer[F]:
         return Slicer(self)
 
+    def equals(self, other) -> bool:
+        return hash(self) == hash(other)
 
-@dataclasses.dataclass
+
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Named(Die[F]):
 
     name: str
@@ -493,7 +496,7 @@ class Named(Die[F]):
         return self.name
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Constant(Die[F]):
 
     value: F
@@ -505,7 +508,7 @@ class Constant(Die[F]):
         return str(self.value)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class DX(Die[int]):
 
     size: int
@@ -517,7 +520,7 @@ class DX(Die[int]):
         return f"d{self.size}"
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Seq(Die[F]):
 
     items: Sequence[F]
@@ -544,7 +547,7 @@ class Operator(Generic[F]):
         )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class OperatorCall(Die[F_co]):
 
     symbol: str
@@ -620,7 +623,7 @@ def ge(left: SupportsGeF, right: SupportsGeF) -> SupportsGeF:
     return left >= right
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Repeated(Die[F]):
 
     number: int
@@ -650,7 +653,7 @@ class Repeated(Die[F]):
         return super().__add__(other)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Bag(Die[F]):
 
     dice: Sequence[Die[F]]
@@ -686,17 +689,16 @@ class Bag(Die[F]):
             return super().__add__(other)
         dice = list(self.dice)
         for die in dice:
-            if not (other == die or other << die):
+            if not other << die:
                 continue
-            dice.remove(die)
             return dataclasses.replace(
                 self,
-                dice=dice + [die + other],
+                dice=[d for d in dice if not d.equals(die)] + [die + other],
             )
         return dataclasses.replace(self, dice=self.dice + [other])
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Item(Die[F]):
 
     die: Die[F]
@@ -711,7 +713,7 @@ class Item(Die[F]):
         )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Slice(Die[Tuple[F]]):
 
     die: Die[F]
@@ -729,7 +731,7 @@ class Slice(Die[Tuple[F]]):
         return self.die.slice_values(self.key).faces
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class FunctionCall(Die[F]):
 
     func: Callable[..., Faces[F]]
@@ -746,7 +748,7 @@ class FunctionCall(Die[F]):
         return self.func(*self.args, **self.kwargs)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False, unsafe_hash=True)
 class MethodCall(Die[F]):
 
     receiver: Die

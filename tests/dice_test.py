@@ -61,6 +61,7 @@ class DiceTest(unittest.TestCase):
             ),
             ("facediv", (_d6 // 2).faces[1], 33.333),
             ("comparison", (_d6 >= 5).faces[True], 33.333),
+            ("equality", (_d6 == 3).faces[True], 16.667),
         ]
     )
     def test_weights(self, _, weight, expected):
