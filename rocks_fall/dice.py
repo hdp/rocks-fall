@@ -174,7 +174,7 @@ class Faces(Generic[F]):
 def dicefunction(func: Callable[..., Faces[F]]) -> Callable[..., Die[F]]:
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> Die[F]:
-        return FunctionCall(func, args, kwargs)
+        return FunctionCall(func, args, tuple(kwargs.items()))
 
     return wrapper
 
@@ -182,7 +182,7 @@ def dicefunction(func: Callable[..., Faces[F]]) -> Callable[..., Die[F]]:
 def dicemethod(func: Callable[..., Faces[F]]) -> Callable[..., Die[F]]:
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs) -> Die[F]:
-        return MethodCall(self, func, args, kwargs)
+        return MethodCall(self, func, args, tuple(kwargs.items()))
 
     return wrapper
 
@@ -736,16 +736,16 @@ class FunctionCall(Die[F]):
 
     func: Callable[..., Faces[F]]
     args: Sequence[Die[F]]
-    kwargs: Dict[Any, Any]
+    kwargs: Sequence[Tuple[Any, Any]]
 
     def __str__(self):
         parts = [str(arg) for arg in self.args] + [
-            f"{k}={v!r}" for k, v in self.kwargs.items()
+            f"{k}={v!r}" for k, v in self.kwargs
         ]
         return f"{self.func.__name__}({', '.join(parts)})"
 
     def get_faces(self) -> Faces:
-        return self.func(*self.args, **self.kwargs)
+        return self.func(*self.args, **dict(self.kwargs))
 
 
 @dataclasses.dataclass(eq=False, unsafe_hash=True)
@@ -754,7 +754,7 @@ class MethodCall(Die[F]):
     receiver: Die
     func: Callable[..., Faces[F]]
     args: Sequence[Die[F]]
-    kwargs: Dict[Any, Any]
+    kwargs: Sequence[Tuple[Any, Any]]
 
     def __str__(self):
         if isinstance(self.receiver, OperatorCall) or isinstance(self.receiver, Bag):
@@ -762,12 +762,12 @@ class MethodCall(Die[F]):
         else:
             receiver = str(self.receiver)
         parts = [str(arg) for arg in self.args] + [
-            f"{k}={v!r}" for k, v in self.kwargs.items()
+            f"{k}={v!r}" for k, v in self.kwargs
         ]
         return f"{receiver}.{self.func.__name__}({', '.join(parts)})"
 
     def get_faces(self) -> Faces:
-        return self.func(self.receiver, *self.args, **self.kwargs)
+        return self.func(self.receiver, *self.args, **dict(self.kwargs))
 
 
 @dicefunction

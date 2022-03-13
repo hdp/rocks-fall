@@ -103,6 +103,8 @@ class DiceTest(unittest.TestCase):
             ("method", _3d6.highest(), "3d6.highest()"),
             ("method + arg", _3d6.highest(2), "3d6.highest(2)"),
             ("method, self parens", (_d6 + _d4).highest(), "(d6 + d4).highest()"),
+            ("method with + constant", _3d6.highest() + 2, "3d6.highest() + 2"),
+            ("method with + die", _3d6.highest() + _d4, "3d6.highest() + d4"),
             ("getitem, single key", _3d6.values[0], "3d6[0]"),
             ("getitem, slice", _3d6.values[:2], "3d6[:2]"),
             ("getitem, negative slice", _3d6.values[-2:], "3d6[-2:]"),
