@@ -82,8 +82,8 @@ def generate_ruin(
                 break
 
     for starting_ruin in starting_values:
-        for row in ruin_results(starting_ruin):
-            yield row
+        for r in ruin_results(starting_ruin):
+            yield r
 
 
 for row in list(generate_ruin())[:5]:

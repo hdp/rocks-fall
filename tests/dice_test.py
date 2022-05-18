@@ -71,7 +71,7 @@ class DiceTest(unittest.TestCase):
         bag = _d8 + _d6 + _d6
         # All faces have 3 values, even though the 2d6 are combined.
         self.assertAlmostEqual(
-            bag.values[:].map(lambda f: len(f)).faces[3], 1, places=5
+            bag.values[:].map(len).faces[3], 1, places=5
         )
         self.assertEqual(str(bag), "d8 + 2d6")
 

@@ -757,7 +757,7 @@ class MethodCall(Die[F]):
     kwargs: Sequence[Tuple[Any, Any]]
 
     def __str__(self):
-        if isinstance(self.receiver, OperatorCall) or isinstance(self.receiver, Bag):
+        if isinstance(self.receiver, (Bag, OperatorCall)):
             receiver = f"({self.receiver})"
         else:
             receiver = str(self.receiver)
@@ -785,11 +785,15 @@ def explode(die: Die[int], *, n: int = 2) -> Faces[int]:
 
 
 class Builder:
-    def __call__(self, arg: int) -> DX:
+
+    @staticmethod
+    def __call__(arg: int) -> DX:
         return DX(arg)
 
-    def __getitem__(self, arg: Sequence[F]) -> Die[F]:
+    @staticmethod
+    def __getitem__(arg: Sequence[F]) -> Die[F]:
         return Seq(arg)
 
-    def constant(self, arg: F) -> Die[F]:
+    @staticmethod
+    def constant(arg: F) -> Die[F]:
         return Constant(arg)
