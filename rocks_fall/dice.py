@@ -440,40 +440,20 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         return self._apply_operator(ge, other)
 
     @dicemethod
-    def slice_values(
-        self, key: slice = slice(0, None), reverse: bool = True
-    ) -> Faces[Tuple[F, ...]]:
-        acc = Faces.from_constant(tuple())
-        for d in self.contained:
-            acc = acc.combine(
-                lambda a, b: tuple(sorted(a + (b,), reverse=reverse))[: key.stop],
-                d.faces,
-            )
-        return acc.map(lambda f: f[key.start : key.stop : key.step])
-
-    @dicemethod
-    def slice(self, key: slice = slice(0, None), reverse: bool = True) -> Faces[F]:
-        return self.slice_values(key, reverse).sum().faces
-
-    @dicemethod
     def highest_values(self, n: int = 1) -> Faces[Tuple[F, ...]]:
-        return self.slice_values(slice(0, n), reverse=True).faces
+        return self.values[:n].faces
 
     @dicemethod
     def highest(self, n: int = 1) -> Faces[F]:
-        return self.highest_values(n).sum().faces
+        return sum_tuples(self.values[:n])
 
     @dicemethod
     def lowest_values(self, n: int = 1) -> Faces[Tuple[F, ...]]:
-        return self.slice_values(slice(0, n), reverse=False).faces
+        return self.values[-n:].faces
 
     @dicemethod
     def lowest(self, n: int = 1) -> Faces[F]:
-        return self.lowest_values(n).sum().faces
-
-    @dicemethod
-    def sum(self) -> Faces[F]:
-        return self.faces.map(lambda v: functools.reduce(lambda a, b: a + b, v))
+        return sum_tuples(self.values[-n:])
 
     @property
     def values(self) -> Slicer[F]:
@@ -698,6 +678,22 @@ class Bag(Die[F]):
         return dataclasses.replace(self, dice=self.dice + [other])
 
 
+def slice_values(die: Die[F], key: slice) -> Faces[Tuple[F, ...]]:
+    acc = Faces.from_constant(tuple())
+    for d in die.contained:
+        acc = acc.combine(
+            lambda a, b: tuple(sorted(a + (b,), reverse=True))[: key.stop],
+            d.faces,
+        )
+    return acc.map(lambda f: f[key.start : key.stop : key.step])
+
+
+def sum_tuples(die: Die[Tuple[F, ...]]) -> Faces[F]:
+    return die.faces.map(
+        lambda vs: functools.reduce(lambda a, b: a + b, vs)
+    )
+
+
 @dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Item(Die[F]):
 
@@ -708,13 +704,11 @@ class Item(Die[F]):
         return f"{self.maybe_wrap(self.die)}[{self.key}]"
 
     def get_faces(self) -> Faces[F]:
-        return self.die.slice_values(slice(self.key, self.key + 1)).faces.map(
-            lambda v: v[0]
-        )
+        return slice_values(self.die, slice(self.key, self.key + 1)).map(lambda v: v[0])
 
 
 @dataclasses.dataclass(eq=False, unsafe_hash=True)
-class Slice(Die[Tuple[F]]):
+class Slice(Die[Tuple[F, ...]]):
 
     die: Die[F]
     key: slice
@@ -727,8 +721,8 @@ class Slice(Die[Tuple[F]]):
             parts.append(str(self.key.step))
         return f"{self.maybe_wrap(self.die)}[{':'.join(parts)}]"
 
-    def get_faces(self) -> Faces[Tuple[F]]:
-        return self.die.slice_values(self.key).faces
+    def get_faces(self) -> Faces[Tuple[F, ...]]:
+        return slice_values(self.die, self.key)
 
 
 @dataclasses.dataclass(eq=False, unsafe_hash=True)
@@ -739,9 +733,7 @@ class FunctionCall(Die[F]):
     kwargs: Sequence[Tuple[Any, Any]]
 
     def __str__(self):
-        parts = [str(arg) for arg in self.args] + [
-            f"{k}={v!r}" for k, v in self.kwargs
-        ]
+        parts = [str(arg) for arg in self.args] + [f"{k}={v!r}" for k, v in self.kwargs]
         return f"{self.func.__name__}({', '.join(parts)})"
 
     def get_faces(self) -> Faces:
@@ -757,13 +749,8 @@ class MethodCall(Die[F]):
     kwargs: Sequence[Tuple[Any, Any]]
 
     def __str__(self):
-        if isinstance(self.receiver, (Bag, OperatorCall)):
-            receiver = f"({self.receiver})"
-        else:
-            receiver = str(self.receiver)
-        parts = [str(arg) for arg in self.args] + [
-            f"{k}={v!r}" for k, v in self.kwargs
-        ]
+        receiver = self.maybe_wrap(self.receiver)
+        parts = [str(arg) for arg in self.args] + [f"{k}={v!r}" for k, v in self.kwargs]
         return f"{receiver}.{self.func.__name__}({', '.join(parts)})"
 
     def get_faces(self) -> Faces:
@@ -785,7 +772,6 @@ def explode(die: Die[int], *, n: int = 2) -> Faces[int]:
 
 
 class Builder:
-
     @staticmethod
     def __call__(arg: int) -> DX:
         return DX(arg)

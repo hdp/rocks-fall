@@ -50,10 +50,10 @@ class DiceTest(unittest.TestCase):
             ("lowest", _2d6.lowest().faces[6], 2.778),
             (
                 "highest values",
-                _3d6.values[:2].faces[(6, 6)],
-                7.407,
+                _3d6.values[:2].faces[(6, 5)],
+                12.50,
             ),
-            ("lowest values", _3d6.values[-2:].faces[(6, 6)], 0.463),
+            ("lowest values", _3d6.values[-2:].faces[(6, 5)], 1.389),
             (
                 "middle slice",
                 _3d6.values[1].faces[3],
