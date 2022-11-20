@@ -725,6 +725,11 @@ class Slice(Die[Tuple[F, ...]]):
         return slice_values(self.die, self.key)
 
 
+def _args_str(args: Sequence, kwargs: Sequence[Tuple[Any, Any]]) -> str:
+    parts = [str(arg) for arg in args] + [f"{k}={v!s}" for k, v in kwargs]
+    return ', '.join(parts)
+
+
 @dataclasses.dataclass(eq=False, unsafe_hash=True)
 class FunctionCall(Die[F]):
 
@@ -733,8 +738,7 @@ class FunctionCall(Die[F]):
     kwargs: Sequence[Tuple[Any, Any]]
 
     def __str__(self):
-        parts = [str(arg) for arg in self.args] + [f"{k}={v!r}" for k, v in self.kwargs]
-        return f"{self.func.__name__}({', '.join(parts)})"
+        return f"{self.func.__name__}({_args_str(self.args, self.kwargs)})"
 
     def get_faces(self) -> Faces:
         return self.func(*self.args, **dict(self.kwargs))
@@ -750,8 +754,7 @@ class MethodCall(Die[F]):
 
     def __str__(self):
         receiver = self.maybe_wrap(self.receiver)
-        parts = [str(arg) for arg in self.args] + [f"{k}={v!r}" for k, v in self.kwargs]
-        return f"{receiver}.{self.func.__name__}({', '.join(parts)})"
+        return f"{receiver}.{self.func.__name__}({_args_str(self.args, self.kwargs)})"
 
     def get_faces(self) -> Faces:
         return self.func(self.receiver, *self.args, **dict(self.kwargs))
