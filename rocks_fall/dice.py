@@ -663,7 +663,7 @@ class Repeated(Die[F]):
 @dataclasses.dataclass(eq=False, unsafe_hash=True)
 class Bag(Die[F]):
 
-    dice: Sequence[Die[F]]
+    dice: Tuple[Die[F], ...]
 
     def get_precedence(self) -> int:
         return _ADD
@@ -700,9 +700,9 @@ class Bag(Die[F]):
                 continue
             return dataclasses.replace(
                 self,
-                dice=[d for d in dice if not d.equals(die)] + [die + other],
+                dice=tuple(d for d in dice if not d.equals(die)) + (die + other,),
             )
-        return dataclasses.replace(self, dice=self.dice + [other])
+        return dataclasses.replace(self, dice=self.dice + (other,))
 
 
 def slice_values(die: Die[F], key: slice) -> Faces[Tuple[F, ...]]:
