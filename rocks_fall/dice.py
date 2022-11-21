@@ -14,6 +14,7 @@ from typing import (
     Generic,
     Iterable,
     Iterator,
+    Optional,
     Sequence,
     Tuple,
     TypeVar,
@@ -78,6 +79,10 @@ if TYPE_CHECKING and sys.version_info >= (3, 8):
 
     class SupportsGeF(Face, Protocol):
         def __ge__(self: F, other: F) -> F:
+            ...
+
+    class HasSize(Protocol):
+        def size(self) -> int:
             ...
 
 else:
@@ -207,6 +212,7 @@ class Slicer(Generic[F]):
 
 
 class Die(Generic[F], metaclass=abc.ABCMeta):
+    size: Optional[int]
 
     # Subclasses should override this to be automatically wrapped in parens
     # when formatting as needed.
@@ -460,7 +466,28 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
         return Slicer(self)
 
     def equals(self, other) -> bool:
-        return hash(self) == hash(other)
+        try:
+            return hash(self) == hash(other)
+        except TypeError as e:
+            raise ValueError(f'Could not hash({self!r}) or hash({other!r}): {e}')
+
+    def drop_by_size(self, n) -> Die[F]:
+        contained = list(self.contained)
+        # All Die subclasses should have a size, but MethodCalls don't for some reason.
+        if any(not hasattr(x, 'size') or x.size is None for x in contained):
+            raise ValueError(f"Can't drop dice from {self}, must all have a defined 'size' (got {contained})")
+        if abs(n) >= len(contained):
+            raise ValueError(f"Can't drop dice from {self}, would result in empty die")
+        dice = sorted(contained, key=lambda x: x.size or 0, reverse=True)
+        if n < 0:
+            return sum_dice(dice[:n])
+        return sum_dice(dice[n:])
+
+    def drop_largest(self, n: int = 1) -> Die[F]:
+        return self.drop_by_size(n)
+
+    def drop_smallest(self, n: int = 1) -> Die[F]:
+        return self.drop_by_size(-n)
 
 
 @dataclasses.dataclass(eq=False, unsafe_hash=True)
@@ -686,6 +713,16 @@ def slice_values(die: Die[F], key: slice) -> Faces[Tuple[F, ...]]:
             d.faces,
         )
     return acc.map(lambda f: f[key.start : key.stop : key.step])
+
+
+def sum_dice(dice: Iterable[Die[F]]) -> Die[F]:
+    if not dice:
+        raise ValueError(f"Need at least one die to sum: {dice!r}")
+    dice = list(dice)
+    ret = dice.pop(0)
+    for d in dice:
+        ret += d
+    return ret
 
 
 def sum_tuples(die: Die[Tuple[F, ...]]) -> Faces[F]:

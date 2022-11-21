@@ -75,6 +75,31 @@ class DiceTest(unittest.TestCase):
         )
         self.assertEqual(str(bag), "d8 + 2d6")
 
+    def test_bag_drop_die_size(self):
+        pool = _d8 + _2d6
+        self.assertEqual(str(pool.drop_largest()), "2d6")
+        self.assertEqual(str(pool.drop_largest(2)), "d6")
+        self.assertEqual(str(pool.drop_smallest()), "d8 + d6")
+
+        with self.assertRaisesRegex(ValueError, "Can't drop"):
+            (_2d6.highest() + _d8).drop_largest()
+
+    def test_repeated_drop_die_size(self):
+        pool = 3 * _d6
+        self.assertEqual(str(pool.drop_largest()), "2d6")
+        self.assertEqual(str(pool.drop_smallest()), "2d6")
+        self.assertEqual(str(pool.drop_largest(2)), "d6")
+
+    def test_other_drop_die_size(self):
+        for pool in [
+            _d6,
+            _2d6.highest(),
+        ]:
+            with self.assertRaisesRegex(ValueError, "Can't drop"):
+                pool.drop_largest()
+            with self.assertRaisesRegex(ValueError, "Can't drop"):
+                pool.drop_smallest()
+
     @parameterized.expand(
         [
             ("dX", _d6, "d6"),
