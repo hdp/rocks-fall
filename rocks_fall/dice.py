@@ -311,7 +311,7 @@ class Die(Generic[F], metaclass=abc.ABCMeta):
             if other << self:
                 # Another class might have a different implementation
                 return other + self
-            return Bag([self, other])
+            return Bag(dice=(self, other))
         if isinstance(other, int):
             # Try to avoid awkward "d6 + -1" formatting.
             if other == 0:

@@ -75,6 +75,13 @@ class DiceTest(unittest.TestCase):
         )
         self.assertEqual(str(bag), "d8 + 2d6")
 
+    def test_bag_hashable(self):
+        bag = (
+            ((2 * _d8) + (2 * _d6)) +
+            ((2 * _d6) + 0)
+        )
+        hash(bag)
+
     def test_bag_drop_die_size(self):
         pool = _d8 + _2d6
         self.assertEqual(str(pool.drop_largest()), "2d6")
