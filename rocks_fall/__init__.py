@@ -1,6 +1,6 @@
 """Rocks Fall: dice probability calculator"""
 
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 
 from .dice import Builder, explode
 
